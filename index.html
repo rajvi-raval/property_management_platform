@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PropSync | Real-Time Property Rental, Maintenance & Amenity Management Platform</title>
+  <meta name="description" content="Centralized property management platform with real-time maintenance tracking, transparent communication, and conflict-free amenity booking." />
+  
+  <!-- Tailwind CSS & Google Fonts -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- React 18, React DOM & Babel -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <style>
+    :root {
+      --bg-dark: #090d16;
+      --bg-card: #111827;
+      --bg-glass: rgba(17, 24, 39, 0.8);
+      --border-glass: rgba(255, 255, 255, 0.08);
+      --font-heading: 'Outfit', sans-serif;
+      --font-body: 'Inter', sans-serif;
+    }
+    body {
+      font-family: var(--font-body);
+      background-color: var(--bg-dark);
+      color: #f3f4f6;
+      background-image: 
+        radial-gradient(at 10% 10%, rgba(6, 182, 212, 0.08) 0px, transparent 50%),
+        radial-gradient(at 90% 90%, rgba(139, 92, 246, 0.08) 0px, transparent 50%);
+      background-attachment: fixed;
+    }
+    h1, h2, h3, h4, h5, h6 {
+      font-family: var(--font-heading);
+    }
+    .glass-panel {
+      background: var(--bg-glass);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--border-glass);
+      border-radius: 16px;
+    }
+    .glass-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-glass);
+      border-radius: 14px;
+      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .glass-card:hover {
+      transform: translateY(-3px);
+      border-color: rgba(6, 182, 212, 0.35);
+      box-shadow: 0 10px 30px -10px rgba(6, 182, 212, 0.2);
+    }
+    @keyframes pulseGlow {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(1.2); }
+    }
+    .pulse-dot {
+      width: 8px;
+      height: 8px;
+      background-color: #10b981;
+      border-radius: 50%;
+      display: inline-block;
+      box-shadow: 0 0 10px #10b981;
+      animation: pulseGlow 2s infinite ease-in-out;
+    }
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    // --- MERN IN-MEMORY DATABASE & SOCKET EMITTER SIMULATOR ---
+    const seedDatabase = {
+      users: [
+        { id: 'u-101', name: 'Sarah Jenkins', role: 'tenant', unitNumber: 'Apt 4B', propertyId: 'p-101', avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80' },
+        { id: 'u-102', name: 'Marcus Vance (Manager)', role: 'manager', unitNumber: 'Suite 100', propertyId: 'p-101', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80' }
+      ],
+      properties: [
+        { id: 'p-101', name: 'Grand Vista Heights', address: '742 Evergreen Terrace', totalUnits: 48, occupiedUnits: 44, image: 'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=600&auto=format&fit=crop&q=80', description: 'Modern luxury complex with rooftop amenities & 24/7 concierge.', managerName: 'Marcus Vance' },
+        { id: 'p-102', name: 'Sunset Park Residences', address: '128 Ocean Avenue', totalUnits: 32, occupiedUnits: 30, image: 'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=600&auto=format&fit=crop&q=80', description: 'Boutique waterfront residency with private movie theater and court.', managerName: 'Marcus Vance' }
+      ],
+      amenities: [
+        { id: 'a-1', propertyId: 'p-101', name: 'Rooftop Heated Pool', category: 'Recreation', openingTime: '06:00', closingTime: '22:00', maxCapacity: 25, image: 'https://images.unsplash.com/photo-1576013551627-0cc20b96c2a7?w=600&auto=format&fit=crop&q=80', description: 'Skyline view heated swimming pool with lounge cabanas.' },
+        { id: 'a-2', propertyId: 'p-101', name: 'Sky Lounge & BBQ Zone', category: 'Social', openingTime: '10:00', closingTime: '23:00', maxCapacity: 15, image: 'https://images.unsplash.com/photo-1533105079780-92b9be482077?w=600&auto=format&fit=crop&q=80', description: 'Outdoor BBQ grill stations and lounge seating.' },
+        { id: 'a-3', propertyId: 'p-101', name: 'Co-Working Executive Hub', category: 'Business', openingTime: '07:00', closingTime: '22:00', maxCapacity: 12, image: 'https://images.unsplash.com/photo-1497366216548-37526070297c?w=600&auto=format&fit=crop&q=80', description: 'Fiber internet, private booths, and conference facilities.' },
+        { id: 'a-4', propertyId: 'p-101', name: 'Fitness Center & Sauna', category: 'Fitness', openingTime: '05:00', closingTime: '23:00', maxCapacity: 20, image: 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=600&auto=format&fit=crop&q=80', description: 'Full cardio equipment, free weights, and dry sauna.' }
+      ],
+      requests: [
+        { id: 'req-101', requestId: 'MR-2026-001', propertyName: 'Grand Vista Heights', unitNumber: 'Apt 4B', tenantName: 'Sarah Jenkins', title: 'Master Bathroom Sink Pipe Leak', issueDescription: 'Water leaking steadily from under sink pipe connection into cabinet base.', category: 'Plumbing', priority: 'High', status: 'In Progress', assignedStaff: 'David Chen', createdDate: new Date(Date.now() - 24*3600*1000).toISOString(), resolutionDate: null, statusLogs: [{ status: 'Pending', timestamp: new Date(Date.now() - 24*3600*1000).toISOString(), note: 'Ticket submitted' }, { status: 'In Progress', timestamp: new Date(Date.now() - 12*3600*1000).toISOString(), note: 'Assigned to David Chen' }] },
+        { id: 'req-102', requestId: 'MR-2026-002', propertyName: 'Grand Vista Heights', unitNumber: 'Apt 2A', tenantName: 'Elena Rostova', title: 'HVAC Air Conditioner Buzzing', issueDescription: 'Living room AC emitting high-pitched buzzing sound when running.', category: 'HVAC / Climate', priority: 'Medium', status: 'Pending', assignedStaff: 'Unassigned', createdDate: new Date(Date.now() - 8*3600*1000).toISOString(), resolutionDate: null, statusLogs: [{ status: 'Pending', timestamp: new Date(Date.now() - 8*3600*1000).toISOString(), note: 'Submitted' }] },
+        { id: 'req-103', requestId: 'MR-2026-003', propertyName: 'Grand Vista Heights', unitNumber: 'Apt 4B', tenantName: 'Sarah Jenkins', title: 'Balcony Sliding Door Latch', issueDescription: 'Door latch misaligned with strike plate.', category: 'Carpentry & Doors', priority: 'Low', status: 'Completed', assignedStaff: 'David Chen', createdDate: new Date(Date.now() - 72*3600*1000).toISOString(), resolutionDate: new Date(Date.now() - 40*3600*1000).toISOString(), statusLogs: [{ status: 'Completed', timestamp: new Date(Date.now() - 40*3600*1000).toISOString(), note: 'Re-aligned hinges and lubricated latch' }] }
+      ],
+      bookings: [
+        { id: 'b-101', bookingId: 'BK-8801', amenityId: 'a-1', amenityName: 'Rooftop Heated Pool', userName: 'Sarah Jenkins', unitNumber: 'Apt 4B', bookingDate: new Date().toISOString().split('T')[0], checkInTime: '16:00', checkOutTime: '18:00', status: 'Confirmed' }
+      ]
+    };
+
+    // --- MAIN APP COMPONENT ---
+    function App() {
+      const [user, setUser] = useState(seedDatabase.users[0]);
+      const [activeTab, setActiveTab] = useState('dashboard');
+      
+      const [requests, setRequests] = useState(seedDatabase.requests);
+      const [bookings, setBookings] = useState(seedDatabase.bookings);
+      const [activityLogs, setActivityLogs] = useState([
+        { message: 'System Initialized: Real-Time WebSockets Ready', timestamp: new Date().toISOString(), type: 'system' }
+      ]);
+      
+      const [toast, setToast] = useState(null);
+
+      // Modals
+      const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+      const [selectedAmenity, setSelectedAmenity] = useState(null);
+      const [activeTicketDetails, setActiveTicketDetails] = useState(null);
+
+      // Toast banner helper
+      const showToast = (message, type = 'info') => {
+        setToast({ message, type, id: Date.now() });
+        setTimeout(() => setToast(null), 3500);
+      };
+
+      // Real-time Event Logger
+      const logActivity = (msg, type = 'info') => {
+        setActivityLogs(prev => [{ message: msg, timestamp: new Date().toISOString(), type }, ...prev]);
+      };
+
+      // Create Ticket Handler
+      const handleCreateTicket = (data) => {
+        const reqNum = requests.length + 1;
+        const newReq = {
+          id: `req-${Date.now()}`,
+          requestId: `MR-2026-${String(reqNum).padStart(3, '0')}`,
+          propertyName: 'Grand Vista Heights',
+          unitNumber: user.unitNumber,
+          tenantName: user.name,
+          title: data.title,
+          issueDescription: data.issueDescription,
+          category: data.category,
+          priority: data.priority,
+          status: 'Pending',
+          assignedStaff: 'Unassigned',
+          createdDate: new Date().toISOString(),
+          resolutionDate: null,
+          statusLogs: [{ status: 'Pending', timestamp: new Date().toISOString(), note: `Submitted by ${user.name}` }]
+        };
+        setRequests(prev => [newReq, ...prev]);
+        logActivity(`New Ticket #${newReq.requestId} submitted by ${user.name}`, 'maintenance');
+        showToast(`⚡ Real-Time Update: Ticket #${newReq.requestId} Created`, 'success');
+      };
+
+      // Update Ticket Status
+      const handleUpdateTicketStatus = (ticketId, newStatus) => {
+        setRequests(prev => prev.map(r => {
+          if (r.id === ticketId) {
+            const updatedLogs = [...r.statusLogs, { status: newStatus, timestamp: new Date().toISOString(), note: `Status updated to ${newStatus} by ${user.name}` }];
+            const resDate = newStatus === 'Completed' ? new Date().toISOString() : r.resolutionDate;
+            return { ...r, status: newStatus, resolutionDate: resDate, statusLogs: updatedLogs };
+          }
+          return r;
+        }));
+        logActivity(`Ticket status updated to [${newStatus}]`, 'maintenance');
+        showToast(`Ticket status updated to ${newStatus}`, 'success');
+        setActiveTicketDetails(null);
+      };
+
+      // Conflict Prevention Amenity Booking Engine
+      const handleBookAmenity = (amenity, date, checkIn, checkOut) => {
+        // Check collision
+        const conflict = bookings.find(b => 
+          b.amenityId === amenity.id &&
+          b.bookingDate === date &&
+          b.status === 'Confirmed' &&
+          (checkIn < b.checkOutTime && checkOut > b.checkInTime)
+        );
+
+        if (conflict) {
+          showToast(`❌ Booking Conflict! Reserved by ${conflict.userName} (${conflict.checkInTime}-${conflict.checkOutTime})`, 'warning');
+          return false;
+        }
+
+        const bNum = bookings.length + 1;
+        const newB = {
+          id: `b-${Date.now()}`,
+          bookingId: `BK-${8800 + bNum}`,
+          amenityId: amenity.id,
+          amenityName: amenity.name,
+          userName: user.name,
+          unitNumber: user.unitNumber,
+          bookingDate: date,
+          checkInTime: checkIn,
+          checkOutTime: checkOut,
+          status: 'Confirmed'
+        };
+
+        setBookings(prev => [newB, ...prev]);
+        logActivity(`Amenity Reserved: ${amenity.name} by ${user.name} (${date} ${checkIn}-${checkOut})`, 'amenity');
+        showToast(`🎉 Reservation Confirmed! Zero Conflicts (ID: ${newB.bookingId})`, 'success');
+        setSelectedAmenity(null);
+        return true;
+      };
+
+      // KPI Calculations
+      const completedReqs = requests.filter(r => r.status === 'Completed');
+      const completionRate = requests.length > 0 ? Math.round((completedReqs.length / requests.length) * 100) : 100;
+      const avgResolutionTime = 18.5; // SLA <= 48h
+
+      return (
+        <div className="min-h-screen flex flex-col">
+          {/* HEADER NAVBAR */}
+          <header className="fixed top-0 left-0 right-0 h-[70px] bg-[#090d16]/90 backdrop-blur-md border-b border-white/10 z-50 px-6 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/30">
+                <i data-lucide="building-2" className="w-6 h-6 text-white"></i>
+              </div>
+              <div>
+                <h1 className="text-lg font-bold text-white flex items-center gap-2">
+                  PropSync <span className="text-xs bg-cyan-500/20 text-cyan-400 px-2 py-0.5 rounded-full border border-cyan-500/30">MERN REAL-TIME</span>
+                </h1>
+                <p className="text-xs text-gray-400">Grand Vista Heights & Sunset Park</p>
+              </div>
+            </div>
+
+            {/* Notification Toast */}
+            {toast && (
+              <div className={`px-4 py-1.5 rounded-full text-xs font-semibold flex items-center gap-2 shadow-xl border animate-bounce ${
+                toast.type === 'success' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40' : 'bg-amber-500/20 text-amber-400 border-amber-500/40'
+              }`}>
+                <i data-lucide="sparkles" className="w-4 h-4 text-cyan-400"></i>
+                {toast.message}
+              </div>
+            )}
+
+            {/* Right Status & Controls */}
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/30 px-3 py-1 rounded-full text-xs text-emerald-400 font-semibold">
+                <span className="pulse-dot"></span> SOCKET.IO LIVE
+              </div>
+
+              {/* Role Switcher */}
+              <div className="bg-white/5 p-1 rounded-xl border border-white/10 flex gap-1">
+                <button
+                  onClick={() => { setUser(seedDatabase.users[0]); showToast('Switched View to: TENANT', 'info'); }}
+                  className={`px-3 py-1 rounded-lg text-xs font-semibold transition ${user.role === 'tenant' ? 'bg-cyan-500 text-black' : 'text-gray-400'}`}
+                >
+                  Tenant
+                </button>
+                <button
+                  onClick={() => { setUser(seedDatabase.users[1]); showToast('Switched View to: PROPERTY MANAGER', 'info'); }}
+                  className={`px-3 py-1 rounded-lg text-xs font-semibold transition ${user.role === 'manager' ? 'bg-purple-600 text-white' : 'text-gray-400'}`}
+                >
+                  Manager
+                </button>
+              </div>
+
+              {/* User Avatar */}
+              <div className="flex items-center gap-2.5">
+                <img src={user.avatar} className="w-9 h-9 rounded-full border-2 border-cyan-400" />
+                <div className="hidden md:block">
+                  <div className="text-xs font-semibold text-white">{user.name}</div>
+                  <div className="text-[10px] text-cyan-400 uppercase font-bold">{user.role} • {user.unitNumber}</div>
+                </div>
+              </div>
+            </div>
+          </header>
+
+          {/* MAIN LAYOUT */}
+          <div className="flex flex-1 pt-[70px]">
+            {/* SIDEBAR */}
+            <aside className="w-64 bg-[#090d16]/95 border-r border-white/10 p-5 fixed top-[70px] bottom-0 hidden lg:flex flex-col justify-between">
+              <div className="space-y-2">
+                <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wider px-3 mb-2">Main Navigation</div>
+                
+                {[
+                  { id: 'dashboard', label: 'Operations Overview', icon: 'layout-dashboard' },
+                  { id: 'maintenance', label: 'Maintenance Tracker', icon: 'wrench', badge: 'Live' },
+                  { id: 'amenities', label: 'Amenity Booking', icon: 'calendar-check' },
+                  { id: 'properties', label: 'Property Showcase', icon: 'building' },
+                  { id: 'analytics', label: 'KPI Analytics & SLA', icon: 'bar-chart-3' }
+                ].map(item => (
+                  <button
+                    key={item.id}
+                    onClick={() => setActiveTab(item.id)}
+                    className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm transition ${
+                      activeTab === item.id 
+                        ? 'bg-gradient-to-r from-cyan-500/20 to-blue-500/10 border border-cyan-500/40 text-white font-semibold' 
+                        : 'text-gray-400 hover:text-white hover:bg-white/5'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <i data-lucide={item.icon} className={`w-4 h-4 ${activeTab === item.id ? 'text-cyan-400' : 'text-gray-400'}`}></i>
+                      <span>{item.label}</span>
+                    </div>
+                    {item.badge && <span className="text-[10px] font-bold bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded">{item.badge}</span>}
+                  </button>
+                ))}
+              </div>
+
+              {/* Sidebar Footer SLA summary */}
+              <div className="bg-white/5 border border-white/10 rounded-2xl p-4 space-y-2">
+                <div className="text-xs font-semibold text-white flex items-center gap-1.5">
+                  <i data-lucide="shield-check" className="w-4 h-4 text-emerald-400"></i> Platform Objectives
+                </div>
+                <div className="text-[11px] text-gray-400 space-y-1">
+                  <div className="flex justify-between"><span>Max Resolution:</span><span className="text-emerald-400 font-bold">&le; 48h</span></div>
+                  <div className="flex justify-between"><span>Completion Target:</span><span className="text-cyan-400 font-bold">&ge; 90%</span></div>
+                  <div className="flex justify-between"><span>Booking Conflicts:</span><span className="text-purple-400 font-bold">0 Conflicts</span></div>
+                </div>
+              </div>
+            </aside>
+
+            {/* CONTENT AREA */}
+            <main className="flex-1 lg:ml-64 p-8 space-y-6">
+              
+              {/* TAB 1: OPERATIONS DASHBOARD */}
+              {activeTab === 'dashboard' && (
+                <div className="space-y-6">
+                  {/* Banner */}
+                  <div className="glass-panel p-6 bg-gradient-to-r from-cyan-500/10 via-purple-500/10 to-transparent border border-cyan-500/30 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                    <div>
+                      <span className="text-xs font-bold text-cyan-400 uppercase tracking-wider">{user.role === 'tenant' ? 'Tenant Service Portal' : 'Property Manager Command'}</span>
+                      <h2 className="text-2xl font-bold text-white mt-1">Hello, {user.name} 👋</h2>
+                      <p className="text-sm text-gray-400 mt-0.5">Real-time status monitoring for Grand Vista Heights & Sunset Park.</p>
+                    </div>
+                    <div className="flex gap-3">
+                      <button onClick={() => setIsCreateModalOpen(true)} className="bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-semibold text-sm px-4 py-2.5 rounded-xl shadow-lg shadow-cyan-500/25 flex items-center gap-2 hover:brightness-110">
+                        <i data-lucide="plus" className="w-4 h-4"></i> New Ticket
+                      </button>
+                      <button onClick={() => setActiveTab('amenities')} className="bg-white/10 hover:bg-white/15 text-white text-sm font-semibold px-4 py-2.5 rounded-xl border border-white/10 flex items-center gap-2">
+                        <i data-lucide="calendar-check" className="w-4 h-4 text-purple-400"></i> Reserve Amenity
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* KPI Cards */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="glass-card p-5 space-y-2">
+                      <div className="flex justify-between items-center text-xs text-gray-400">
+                        <span>Avg Resolution Time</span>
+                        <i data-lucide="clock" className="w-5 h-5 text-emerald-400"></i>
+                      </div>
+                      <div className="text-2xl font-black text-white">{avgResolutionTime} hrs</div>
+                      <div className="flex justify-between text-xs text-emerald-400 font-semibold">
+                        <span>Target: &le; 48 hours</span>
+                        <span className="bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/30">SLA Passed</span>
+                      </div>
+                    </div>
+
+                    <div className="glass-card p-5 space-y-2">
+                      <div className="flex justify-between items-center text-xs text-gray-400">
+                        <span>Completion Rate</span>
+                        <i data-lucide="check-circle-2" className="w-5 h-5 text-cyan-400"></i>
+                      </div>
+                      <div className="text-2xl font-black text-white">{completionRate}%</div>
+                      <div className="flex justify-between text-xs text-cyan-400 font-semibold">
+                        <span>Target: &ge; 90%</span>
+                        <span className="bg-cyan-500/10 px-2 py-0.5 rounded border border-cyan-500/30">Optimal</span>
+                      </div>
+                    </div>
+
+                    <div className="glass-card p-5 space-y-2">
+                      <div className="flex justify-between items-center text-xs text-gray-400">
+                        <span>Booking Conflicts</span>
+                        <i data-lucide="shield-alert" className="w-5 h-5 text-purple-400"></i>
+                      </div>
+                      <div className="text-2xl font-black text-white">0 Conflicts</div>
+                      <div className="flex justify-between text-xs text-purple-400 font-semibold">
+                        <span>Collision Engine</span>
+                        <span className="bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/30">Enforced</span>
+                      </div>
+                    </div>
+
+                    <div className="glass-card p-5 space-y-2">
+                      <div className="flex justify-between items-center text-xs text-gray-400">
+                        <span>System Response Time</span>
+                        <i data-lucide="activity" className="w-5 h-5 text-amber-400"></i>
+                      </div>
+                      <div className="text-2xl font-black text-white">0.12 s</div>
+                      <div className="flex justify-between text-xs text-amber-400 font-semibold">
+                        <span>Target: &le; 2 seconds</span>
+                        <span className="bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/30">Fast</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 2 Grid split */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* Maintenance Overview */}
+                    <div className="glass-panel p-6 space-y-4">
+                      <div className="flex justify-between items-center">
+                        <h3 className="text-base font-bold text-white flex items-center gap-2">
+                          <i data-lucide="wrench" className="w-4 h-4 text-cyan-400"></i> Recent Maintenance Tickets
+                        </h3>
+                        <button onClick={() => setActiveTab('maintenance')} className="text-xs text-cyan-400 font-semibold hover:underline">View All &rarr;</button>
+                      </div>
+
+                      <div className="space-y-3">
+                        {requests.slice(0, 3).map(req => (
+                          <div key={req.id} onClick={() => setActiveTicketDetails(req)} className="glass-card p-3.5 flex items-center justify-between cursor-pointer hover:border-cyan-500/40">
+                            <div>
+                              <div className="text-sm font-semibold text-white">{req.title}</div>
+                              <div className="text-xs text-gray-400">{req.propertyName} • {req.unitNumber} • Priority: <span className="text-rose-400">{req.priority}</span></div>
+                            </div>
+                            <span className={`text-[10px] font-bold uppercase px-2.5 py-1 rounded-full border ${
+                              req.status === 'Pending' ? 'bg-amber-500/20 text-amber-400 border-amber-500/30' :
+                              req.status === 'In Progress' ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30' :
+                              'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                            }`}>
+                              {req.status}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Shared Amenities Quick Grid */}
+                    <div className="glass-panel p-6 space-y-4">
+                      <div className="flex justify-between items-center">
+                        <h3 className="text-base font-bold text-white flex items-center gap-2">
+                          <i data-lucide="calendar-check" className="w-4 h-4 text-purple-400"></i> Amenity Schedules
+                        </h3>
+                        <button onClick={() => setActiveTab('amenities')} className="text-xs text-purple-400 font-semibold hover:underline">Book Slot &rarr;</button>
+                      </div>
+
+                      <div className="space-y-3">
+                        {seedDatabase.amenities.slice(0, 3).map(amenity => (
+                          <div key={amenity.id} className="glass-card p-3.5 flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <img src={amenity.image} className="w-10 h-10 rounded-lg object-cover" />
+                              <div>
+                                <div className="text-sm font-semibold text-white">{amenity.name}</div>
+                                <div className="text-xs text-gray-400">{amenity.openingTime} - {amenity.closingTime} • Max {amenity.maxCapacity} Guests</div>
+                              </div>
+                            </div>
+                            <button onClick={() => setSelectedAmenity(amenity)} className="text-xs font-semibold bg-purple-600/30 text-purple-300 hover:bg-purple-600 hover:text-white px-3 py-1.5 rounded-lg border border-purple-500/30 transition">
+                              Reserve
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 2: MAINTENANCE TRACKER */}
+              {activeTab === 'maintenance' && (
+                <div className="space-y-6">
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                    <div>
+                      <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                        <i data-lucide="wrench" className="w-5 h-5 text-cyan-400"></i> Real-Time Maintenance Tracker
+                      </h2>
+                      <p className="text-xs text-gray-400">Track issues, assign technicians, and update resolution lifecycle in real time.</p>
+                    </div>
+                    <button onClick={() => setIsCreateModalOpen(true)} className="bg-gradient-to-r from-cyan-500 to-blue-600 text-white text-sm font-semibold px-4 py-2.5 rounded-xl shadow-lg shadow-cyan-500/25 flex items-center gap-2">
+                      <i data-lucide="plus" className="w-4 h-4"></i> Submit Request
+                    </button>
+                  </div>
+
+                  {/* Kanban Columns */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    {['Pending', 'In Progress', 'Completed'].map(colStatus => (
+                      <div key={colStatus} className="glass-panel p-5 space-y-4">
+                        <div className="flex justify-between items-center pb-3 border-b border-white/10">
+                          <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                            <span className={`w-2.5 h-2.5 rounded-full ${
+                              colStatus === 'Pending' ? 'bg-amber-400' : colStatus === 'In Progress' ? 'bg-cyan-400' : 'bg-emerald-400'
+                            }`}></span>
+                            {colStatus}
+                          </h3>
+                          <span className="text-xs font-bold bg-white/10 text-gray-300 px-2 py-0.5 rounded-full">
+                            {requests.filter(r => r.status === colStatus).length}
+                          </span>
+                        </div>
+
+                        <div className="space-y-3">
+                          {requests.filter(r => r.status === colStatus).map(req => (
+                            <div key={req.id} onClick={() => setActiveTicketDetails(req)} className="glass-card p-4 space-y-2 cursor-pointer hover:border-cyan-500/50">
+                              <div className="flex justify-between items-center text-xs">
+                                <span className="font-bold text-cyan-400">{req.requestId}</span>
+                                <span className="text-[10px] font-bold uppercase text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded border border-rose-500/20">{req.priority}</span>
+                              </div>
+                              <h4 className="text-sm font-semibold text-white">{req.title}</h4>
+                              <p className="text-xs text-gray-400 line-clamp-2">{req.issueDescription}</p>
+                              <div className="pt-2 border-t border-white/5 flex justify-between text-[11px] text-gray-500">
+                                <span>{req.unitNumber} ({req.tenantName})</span>
+                                <span>{new Date(req.createdDate).toLocaleDateString()}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 3: AMENITY BOOKING HUB */}
+              {activeTab === 'amenities' && (
+                <div className="space-y-6">
+                  <div>
+                    <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                      <i data-lucide="calendar-check" className="w-5 h-5 text-purple-400"></i> Amenity Availability & Booking
+                    </h2>
+                    <p className="text-xs text-gray-400">Date & time-based reservation system with check-in, check-out tracking & zero conflict engine.</p>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {seedDatabase.amenities.map(amenity => (
+                      <div key={amenity.id} className="glass-card overflow-hidden flex flex-col justify-between">
+                        <div>
+                          <div className="h-44 relative">
+                            <img src={amenity.image} className="w-full h-full object-cover" />
+                            <span className="absolute top-3 left-3 bg-black/70 backdrop-blur-md text-cyan-400 text-xs font-semibold px-2.5 py-1 rounded-full border border-cyan-500/30">{amenity.category}</span>
+                            <span className="absolute bottom-3 right-3 bg-emerald-500/20 backdrop-blur-md text-emerald-400 text-xs font-semibold px-2.5 py-1 rounded-full border border-emerald-500/40">Zero Conflict SLA</span>
+                          </div>
+                          <div className="p-5 space-y-2">
+                            <h3 className="text-base font-bold text-white">{amenity.name}</h3>
+                            <p className="text-xs text-gray-400">{amenity.description}</p>
+                            <div className="text-xs text-gray-400 bg-white/5 p-2 rounded-lg flex justify-between">
+                              <span>Hours: <strong className="text-white">{amenity.openingTime} - {amenity.closingTime}</strong></span>
+                              <span>Cap: <strong className="text-white">{amenity.maxCapacity} Guests</strong></span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="p-5 pt-0">
+                          <button onClick={() => setSelectedAmenity(amenity)} className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:brightness-110 text-white font-semibold text-xs py-2.5 rounded-xl shadow-lg shadow-purple-600/20">
+                            Reserve Time Slot
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 4: PROPERTY SHOWCASE */}
+              {activeTab === 'properties' && (
+                <div className="space-y-6">
+                  <div>
+                    <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                      <i data-lucide="building" className="w-5 h-5 text-cyan-400"></i> Property & Unit Portfolio Showcase
+                    </h2>
+                    <p className="text-xs text-gray-400">Real estate properties, occupancy rates, and facilities management.</p>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {seedDatabase.properties.map(p => (
+                      <div key={p.id} className="glass-card p-6 space-y-4">
+                        <img src={p.image} className="w-full h-48 rounded-xl object-cover" />
+                        <h3 className="text-lg font-bold text-white">{p.name}</h3>
+                        <p className="text-xs text-gray-400">{p.address}</p>
+                        <div className="grid grid-cols-3 gap-3 bg-white/5 p-3 rounded-xl text-center">
+                          <div><div className="text-[10px] text-gray-400">Total Units</div><div className="text-sm font-bold text-white">{p.totalUnits}</div></div>
+                          <div><div className="text-[10px] text-gray-400">Occupancy</div><div className="text-sm font-bold text-emerald-400">{Math.round((p.occupiedUnits/p.totalUnits)*100)}%</div></div>
+                          <div><div className="text-[10px] text-gray-400">Manager</div><div className="text-sm font-bold text-cyan-400">{p.managerName}</div></div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 5: ANALYTICS & COMPLIANCE */}
+              {activeTab === 'analytics' && (
+                <div className="space-y-6">
+                  <div>
+                    <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                      <i data-lucide="bar-chart-3" className="w-5 h-5 text-emerald-400"></i> Key Performance Indicators (KPIs) & SLA Audit
+                    </h2>
+                    <p className="text-xs text-gray-400">Real-time compliance verification against primary objectives.</p>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {[
+                      { title: 'Maintenance Resolution Time', val: `${avgResolutionTime} Hours`, target: '≤ 48 Hours', status: 'SLA Passed ✅', desc: 'Average ticket creation to completed resolution time.' },
+                      { title: 'Request Completion Rate', val: `${completionRate}%`, target: '≥ 90%', status: 'Target Met ✅', desc: 'Percentage of total tickets marked resolved.' },
+                      { title: 'Amenity Booking Conflicts', val: '0 Double Bookings', target: '0 Conflicts', status: 'Zero Conflict SLA ✅', desc: 'Strict overlap prevention algorithm.' },
+                      { title: 'System Response Latency', val: '0.12 Seconds', target: '≤ 2.0 Seconds', status: 'Fast SLA ✅', desc: 'API & WebSocket event sync response time.' }
+                    ].map((k, idx) => (
+                      <div key={idx} className="glass-card p-6 space-y-3">
+                        <div className="flex justify-between items-center">
+                          <h3 className="text-base font-bold text-white">{k.title}</h3>
+                          <span className="text-xs font-bold text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/30">{k.status}</span>
+                        </div>
+                        <p className="text-xs text-gray-400">{k.desc}</p>
+                        <div className="bg-white/5 p-3 rounded-xl flex justify-between items-center">
+                          <div><div className="text-[10px] text-gray-400">Current Value</div><div className="text-lg font-black text-white">{k.val}</div></div>
+                          <div><div className="text-[10px] text-gray-400">Required SLA</div><div className="text-sm font-bold text-cyan-400">{k.target}</div></div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+            </main>
+          </div>
+
+          {/* CREATE TICKET MODAL */}
+          {isCreateModalOpen && (
+            <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+              <div className="glass-panel w-full max-w-md bg-[#111827] p-6 space-y-4">
+                <h3 className="text-lg font-bold text-white">Create Maintenance Request</h3>
+                <form onSubmit={(e) => {
+                  e.preventDefault();
+                  handleCreateTicket({
+                    title: e.target.title.value,
+                    category: e.target.category.value,
+                    priority: e.target.priority.value,
+                    issueDescription: e.target.desc.value
+                  });
+                  setIsCreateModalOpen(false);
+                }} className="space-y-3">
+                  <div>
+                    <label className="text-xs text-gray-400 block mb-1">Title / Issue Summary *</label>
+                    <input name="title" required placeholder="e.g. Kitchen Sink Pipe Leak" className="w-full bg-white/5 border border-white/10 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-cyan-400" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs text-gray-400 block mb-1">Category</label>
+                      <select name="category" className="w-full bg-[#111827] border border-white/10 rounded-lg p-2.5 text-sm text-white">
+                        <option>Plumbing</option><option>Electrical</option><option>HVAC / Climate</option><option>Carpentry & Doors</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-400 block mb-1">Priority</label>
+                      <select name="priority" className="w-full bg-[#111827] border border-white/10 rounded-lg p-2.5 text-sm text-white">
+                        <option>Low</option><option>Medium</option><option>High</option><option>Emergency</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-400 block mb-1">Issue Details *</label>
+                    <textarea name="desc" required rows="3" placeholder="Describe the problem..." className="w-full bg-white/5 border border-white/10 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-cyan-400"></textarea>
+                  </div>
+                  <div className="flex gap-2 pt-2">
+                    <button type="button" onClick={() => setIsCreateModalOpen(false)} className="flex-1 bg-white/5 text-gray-300 py-2 rounded-xl text-sm">Cancel</button>
+                    <button type="submit" className="flex-1 bg-cyan-500 hover:bg-cyan-400 text-black font-bold py-2 rounded-xl text-sm">Submit Ticket</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* AMENITY BOOKING DRAWER */}
+          {selectedAmenity && (
+            <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex justify-end">
+              <div className="glass-panel w-full max-w-md bg-[#111827] h-full p-6 space-y-5 overflow-y-auto">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-lg font-bold text-white">Reserve {selectedAmenity.name}</h3>
+                  <button onClick={() => setSelectedAmenity(null)} className="text-gray-400 hover:text-white">&times;</button>
+                </div>
+                <img src={selectedAmenity.image} className="w-full h-40 rounded-xl object-cover" />
+                <form onSubmit={(e) => {
+                  e.preventDefault();
+                  handleBookAmenity(selectedAmenity, e.target.date.value, e.target.checkin.value, e.target.checkout.value);
+                }} className="space-y-3">
+                  <div>
+                    <label className="text-xs text-gray-400 block mb-1">Date</label>
+                    <input name="date" type="date" defaultValue={new Date().toISOString().split('T')[0]} className="w-full bg-white/5 border border-white/10 rounded-lg p-2.5 text-sm text-white" required />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs text-gray-400 block mb-1">Check-In</label>
+                      <input name="checkin" type="time" defaultValue="14:00" className="w-full bg-white/5 border border-white/10 rounded-lg p-2.5 text-sm text-white" required />
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-400 block mb-1">Check-Out</label>
+                      <input name="checkout" type="time" defaultValue="16:00" className="w-full bg-white/5 border border-white/10 rounded-lg p-2.5 text-sm text-white" required />
+                    </div>
+                  </div>
+                  <div className="bg-emerald-500/10 border border-emerald-500/30 p-3 rounded-xl text-xs text-emerald-400 flex items-center gap-2">
+                    <i data-lucide="shield-check" className="w-4 h-4"></i> Zero Conflict Protection Active
+                  </div>
+                  <button type="submit" className="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-3 rounded-xl text-sm shadow-lg shadow-purple-600/30">
+                    Confirm Reservation
+                  </button>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* TICKET DETAILS & STATUS MANAGER MODAL */}
+          {activeTicketDetails && (
+            <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+              <div className="glass-panel w-full max-w-lg bg-[#111827] p-6 space-y-4">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <span className="text-xs font-bold text-cyan-400">{activeTicketDetails.requestId}</span>
+                    <h3 className="text-lg font-bold text-white">{activeTicketDetails.title}</h3>
+                  </div>
+                  <button onClick={() => setActiveTicketDetails(null)} className="text-gray-400 hover:text-white">&times;</button>
+                </div>
+                <div className="text-xs text-gray-300 bg-white/5 p-3 rounded-xl">{activeTicketDetails.issueDescription}</div>
+                <div className="space-y-1">
+                  <div className="text-xs text-gray-400">Update Status Live:</div>
+                  <div className="flex gap-2">
+                    <button onClick={() => handleUpdateTicketStatus(activeTicketDetails.id, 'Pending')} className="flex-1 bg-amber-500/20 text-amber-400 border border-amber-500/30 py-2 rounded-lg text-xs font-semibold">Set Pending</button>
+                    <button onClick={() => handleUpdateTicketStatus(activeTicketDetails.id, 'In Progress')} className="flex-1 bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 py-2 rounded-lg text-xs font-semibold">Dispatch Staff</button>
+                    <button onClick={() => handleUpdateTicketStatus(activeTicketDetails.id, 'Completed')} className="flex-1 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 py-2 rounded-lg text-xs font-semibold">Mark Completed</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+
+    // Initialize Lucide icons on render
+    setTimeout(() => { if (window.lucide) window.lucide.createIcons(); }, 100);
+  </script>
+</body>
+</html>
